@@ -1,0 +1,245 @@
+#!/bin/bash
+
+declare -a bingoCard # 1D-Array with all numbers in bingo
+declare -a callList # Array with all the called numbers
+
+#Creates the array bingoCard
+for i in `sed -e 1d $1`; do
+    bingoCard+=(${i})
+done
+
+bingoCard[12]="00m"
+
+fileSeed=$1
+line=$(head -1 ${fileSeed})
+RANDOM=${line}
+
+# Prints array in a bingo format
+printCard () {
+    arraylength=${#bingoCard[@]}
+
+    for (( i=0; i<${arraylength}; i++ ));
+    do
+        if [[ $(($i % 5)) -eq 0  && $i -ne 0 ]]
+        then
+            echo ""
+			if [[ ${bingoCard[$i]: -1} == "m"  ]]; then
+            	echo -n "${bingoCard[$i]} "
+			else
+				echo -n "${bingoCard[$i]}  "
+			fi
+        else
+            if [[ ${bingoCard[$i]: -1} == "m"  ]]; then
+            	echo -n "${bingoCard[$i]} "
+			else
+				echo -n "${bingoCard[$i]}  "
+			fi
+        fi
+done
+}
+
+printCallList(){
+	stringList=""
+	for i in "${callList[@]}"
+	do
+		stringList="${i}"
+	done
+	echo
+	echo "CALL LIST: ${stringList}"
+}
+
+checkRowWin(){
+	#row
+	x=0
+	sum=0
+	count=5
+	while [ $x -le $count ]
+	do
+		current=${bingoCard[$x]}
+		if [[ ${current:2:2} = "m" ]]; then
+			sum=$(($sum + 1))
+		fi
+
+		if [[ $sum -eq 5 ]]; then
+			echo
+			echo "WINNER"
+			return 2
+			break
+		fi
+
+		if [[ $x -eq $count ]]; then
+			echo "count is equal to x"
+			break
+		fi
+
+
+		if [[ $x -eq $(($count - 1)) ]] && [[ $sum -ne 5  ]]; then
+			sum=0
+			count=$(( $count + 5))
+		fi
+
+		if [[ $x -eq 30 ]]; then
+			break
+		fi
+
+#       echo "the count is $count ."
+#       echo "the index is $x ."
+#       echo "the sum is $sum ."
+		x=$(($x + 1))
+	done
+}
+
+checkColumnWin(){
+	#column
+	first=0
+	second=5
+	third=10
+	fourth=15
+	fifth=20
+
+	columns=5
+	column=0
+
+	while [ $column -le $columns ]
+	do
+
+			arrFirst=${bingoCard[$first]}
+			arrSecond=${bingoCard[$second]}
+			arrThird=${bingoCard[$third]}
+			arrFourth=${bingoCard[$fourth]}
+			arrFifth=${bingoCard[$fifth]}
+
+
+			if [[ ${arrFirst:2:2} = "m" ]] && [[ ${arrSecond:2:2} = "m" ]] && [[ ${arrThird:2:2} = "m" ]] && [[ ${arrFourth:2:2} = "m" ]] && [[ ${arrFifth:2:2} = "m" ]]; then
+				echo
+				echo "WINNER"
+				return 2
+				break
+			fi
+
+			first=$(($first + 1))
+			second=$(($second + 1))
+			third=$(($third + 1))
+			fourth=$(($fourth + 1))
+			fifth=$(($fifth + 1))
+			column=$(($column + 1))
+	done
+}
+
+checkCornerWin(){
+	#corners
+	topLeft=${bingoCard[0]}
+	topRight=${bingoCard[4]}
+	bottomLeft=${bingoCard[20]}
+	bottomRight=${bingoCard[24]}
+
+	if [[ ${topLeft: -1} == "m"  ]] && [[ ${topRight: -1} == "m"  ]] && [[ ${bottomLeft: -1} == "m"  ]] && [[ ${bottomRight: -1} == "m"  ]]; then
+		echo
+		echo "WINNER"
+		return 2
+	fi
+}
+
+# THE MAIN GAMEPLAY
+playNumber(){
+	playing=true
+	
+	while ${playing}; do
+		if [[ ${quitgame} == "q" ]]
+			then playing=false
+		fi
+
+		callNumber=$((1 + $RANDOM % 75))
+		while [[ " ${callList[*]} " =~ " ${callNumber} " ]]
+		do
+			callNumber=$((1 + $RANDOM % 75))
+		done
+
+		for i in "${!bingoCard[@]}"; do
+			if ((${callNumber} >= 1 && ${callNumber} <= 9)); then
+				placeNumber="0${callNumber}"
+			else
+				placeNumber="${callNumber}"
+			fi
+
+			if [[ ${bingoCard[$i]} == "$placeNumber" ]]; then
+				bingoCard[$i]="${bingoCard[$i]}m"
+			fi
+		done
+
+		if ((${callNumber} >= 1 && ${callNumber} <= 9)); then
+			callList+="L0${callNumber} "
+		elif ((${callNumber} >= 1 && ${callNumber} <= 15)); then
+			callList+="L${callNumber} "
+		elif ((${callNumber} >= 16 && ${callNumber} <= 30)); then
+			callList+="I${callNumber} "
+		elif ((${callNumber} >= 31 && ${callNumber} <= 45)); then
+			callList+="N${callNumber} "
+		elif ((${callNumber} >= 46 && ${callNumber} <= 60)); then
+			callList+="U${callNumber} "
+		elif ((${callNumber} >= 61 && ${callNumber} <= 75)); then
+			callList+="X${callNumber} "
+		fi
+
+
+		echo
+		printCallList
+		echo "L   I   N   U   X"
+		printCard
+		echo
+
+		read -n 1 -r -p "Press any key to call a number (q to quit): " quitgame
+		checkCornerWin
+		if [[ $? -eq 2 ]]
+		then
+			playing=false
+		fi
+		checkColumnWin
+		if [[ $? -eq 2 ]]
+		then
+			playing=false
+		fi
+		checkRowWin
+		if [[ $? -eq 2 ]]
+		then
+			playing=false
+		fi
+
+		clear
+	done
+}
+
+check(){
+    echo $1>&2
+    exit $2
+}
+for file in $1
+    do
+    	if [[ ! -r ${file} || ! -f ${file} ]]
+     		then check "Input file is missing or unreadable"
+    	fi
+		
+    	if [[ $(wc -l <${file}) -ne 6 ]]
+     		then check "Input file must have 6 lines"
+    	fi
+
+    	if [[ $(head -1 ${file} | grep -L '^[0-9]*$') ]]
+     		then check "Seed line format error"
+    	fi
+
+    	if [[ $(awk '{print NF}' ${file} | tr '\n' ' ') != "1 5 5 5 5 5 " ]]; 
+     		then check "Card format error"
+    	fi
+
+		# Suppose to check if columns are within the range, but doesn't work
+		# if [[ $( sed '2d' badInput8 | tr ' ' '\n' | sed -n '1~5p' ) != '^[01-15]*$' ]]; 
+		# 	then check "wrong" ; 
+		# fi		
+
+    	if [[ -d ${file} ]]
+     		then check " ${file} is a directory "
+    	fi
+ 	done
+
+playNumber
+echo
